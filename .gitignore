@@ -1,0 +1,6 @@
+.env
+/transcripts/
+/preprocessed/
+/labeled/
+/forexgpt/
+/data/

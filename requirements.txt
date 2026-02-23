@@ -1,0 +1,12 @@
+
+pypdf>=4.0.0
+pdfplumber>=0.10.0
+
+# OCR (for image-based / Seeking Alpha screenshot PDFs) 
+pdf2image>=1.17.0
+pytesseract>=0.3.10
+Pillow>=10.0.0
+
+openai>=1.0.0
+python-dotenv>=1.0.0
+tqdm>=4.66.0
