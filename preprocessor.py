@@ -63,7 +63,6 @@ def _elapsed(start: float) -> str:
 _QUARTER_MONTH = {"Q1": "04", "Q2": "07", "Q3": "10", "Q4": "01"}
 
 
-# =============================================================================
 class FilenameParser:
     """
     Extracts (company_name, quarter, year) from an earnings transcript filename.
@@ -92,7 +91,6 @@ class FilenameParser:
         return company_name, quarter, year
 
 
-# =============================================================================
 class TickerResolver:
     """Looks up ticker from company name using TICKER_MAP (longest-key-first).
 
@@ -128,7 +126,6 @@ class TickerResolver:
         return "UNKNOWN"
 
 
-# =============================================================================
 class PDFExtractor:
     """
     PDF text extraction with automatic image-PDF detection and OCR fallback.
@@ -260,12 +257,12 @@ class PDFExtractor:
             log.warning("    Cannot open PDF: %s", e)
             return "", True
 
-        #  Step 1: 3-page sample to classify PDF type ────────────────────────
+        #  Step 1: 3-page sample to classify PDF type
         log.info("    Sampling first 3 pages to detect PDF type...")
         sample_chars, spp = cls._sample_pages(reader, n=3)
         log.info("    Sample: %d chars, %.3fs/page", sample_chars, spp)
 
-        # ── Step 2: Text PDF → full pypdf extraction ──────────────────────────
+        #  Step 2: Text PDF → full pypdf extraction
         if sample_chars > 0:
             log.info("    Text layer confirmed — running full pypdf extraction...")
             pages_text: list[str] = []
@@ -278,7 +275,7 @@ class PDFExtractor:
                 log.info("    pypdf extracted %d chars", len(combined))
                 return combined, False
 
-        # ── Step 3 & 4: No text → run OCR ────────────────────────────────────
+        #  Step 3 & 4: No text → run OCR
         is_image = spp > cls._IMAGE_SPP_THRESHOLD
         if is_image:
             log.info("    Image-based PDF detected (%.3fs/page > %.2f threshold) — running OCR",
@@ -294,7 +291,6 @@ class PDFExtractor:
             return "", True
 
 
-# =============================================================================
 class FormatDetector:
     """
     Detects which of the known transcript formats a document uses.
@@ -360,7 +356,6 @@ class FormatDetector:
         return "inline"
 
 
-# =============================================================================
 class TextCleaner:
     """
     Cleans raw PDF-extracted text.
@@ -405,7 +400,6 @@ class TextCleaner:
         return text.strip()
 
 
-# =============================================================================
 class SpeakerIdentifier:
     """
     Segments transcript text into per-speaker blocks.
@@ -447,7 +441,7 @@ class SpeakerIdentifier:
         (re.compile(r"\boperator\b", re.I), "Operator"),
     ]
 
-    # ── Strategy A: inline speaker regex ─────────────────────────────────────
+    #  Strategy A: inline speaker regex
     # Anchor: start-of-string OR after sentence-ending punctuation + whitespace
     _INLINE_SPEAKER = re.compile(
         r"(?:^|(?<=[.!?])\s+)"
@@ -457,7 +451,7 @@ class SpeakerIdentifier:
         r"\s*:\s+",
     )
 
-    # ── Strategy B: FactSet dotted separator ─────────────────────────────────
+    #  Strategy B: FactSet dotted separator
     _FACTSET_SEPARATOR = re.compile(r"\.{10,}")
     # Title-case name on its own line (FactSet speaker name line)
     _FACTSET_NAME_LINE = re.compile(
@@ -466,7 +460,7 @@ class SpeakerIdentifier:
     # Inline Operator: prefix in FactSet docs
     _FACTSET_OPERATOR = re.compile(r"^Operator\s*:", re.MULTILINE)
 
-    # ── Strategy C: Microsoft ALLCAPS speaker ────────────────────────────────
+    #  Strategy C: Microsoft ALLCAPS speaker
     # Pattern: "FIRSTNAME [LASTNAME[, Firm]]:  text"  (all on one line, at line start)
     # Examples: "BRETT IVERSEN:  Good afternoon"
     #           "KARL KEIRSTEAD, UBS:  Thank you"
@@ -486,7 +480,7 @@ class SpeakerIdentifier:
         re.MULTILINE,
     )
 
-    # ── Shared ───
+    #  Shared
     # Lines to skip: FactSet headers, page footers, copyright, URLs, timestamps
     _SKIP_LINE = re.compile(
         r"(1-877-FACTSET|callstreet\.com|Copyright\s*©|www\.|"
@@ -509,7 +503,7 @@ class SpeakerIdentifier:
                 return role
         return "Other"
 
-    # ── Strategy A ────────────────────────────────────────────────────────────
+    #  Strategy A
     @classmethod
     def _segment_inline(cls, text: str) -> list[dict]:
         segments: list[dict] = []
@@ -537,7 +531,7 @@ class SpeakerIdentifier:
 
         return segments
 
-    # ── Strategy B ────────────────────────────────────────────────────────────
+    #  Strategy B
     @classmethod
     def _segment_factset(cls, text: str) -> list[dict]:
         """
@@ -631,7 +625,7 @@ class SpeakerIdentifier:
         role = cls._classify_role(lower)
         return role if role != "Other" else "Other"
 
-    # ── Strategy C ────────────────────────────────────────────────────────────
+    #  Strategy C
     @classmethod
     def _segment_msft(cls, text: str) -> list[dict]:
         """
@@ -681,7 +675,7 @@ class SpeakerIdentifier:
 
         return segments
 
-    # ── Strategy D ────────────────────────────────────────────────────────────
+    #  Strategy D
     # SA standalone speaker name: Title Case, 2-5 words, nothing else on the line
     _SA_NAME_LINE = re.compile(
         r"^([A-Z][a-z]+(?:\s+[A-Z][a-z\'\-]+){1,4})\s*$"
@@ -707,7 +701,7 @@ class SpeakerIdentifier:
         re.IGNORECASE,
     )
 
-    # ── SA run-together fix ───────────────────────────────────────────────────
+    #  SA run-together fix
     @classmethod
     def _inject_sa_newlines(cls, text: str) -> str:
         """
@@ -732,7 +726,7 @@ class SpeakerIdentifier:
         name on its own line, followed by an optional title line, followed by
         speech lines — exactly the expected format.
         """
-        # ── Build roster map: name → job title ───────────────────────────────
+        #  Build roster map: name → job title
         roster_map: dict[str, str] = {}
 
         # Prefer the structured Company Participants block when present
@@ -780,7 +774,7 @@ class SpeakerIdentifier:
         # skip Operator for after-name pass
         alt_names = [n for n in names if n != "Operator"]
 
-        # ── Pass 1: inject \n BEFORE each name (when not already line-initial) ─
+        #  Pass 1: inject \n BEFORE each name (when not already line-initial)
         pat_before = re.compile(
             r"(?<!\n)(" + "|".join(re.escape(n) for n in names) + r")(?!\s*-)"
         )
@@ -790,7 +784,7 @@ class SpeakerIdentifier:
 
         text = pat_before.sub(_before, text)
 
-        # ── Pass 2: inject \n AFTER each name (when followed by non-newline content)
+        #  Pass 2: inject \n AFTER each name (when followed by non-newline content)
         if alt_names:
             pat_after = re.compile(
                 r"(" + "|".join(re.escape(n) for n in alt_names) + r")"
@@ -798,7 +792,7 @@ class SpeakerIdentifier:
             )
             text = pat_after.sub(lambda m: m.group(1) + "\n", text)
 
-        # ── Pass 3: inject \n AFTER known job titles (when run into speech) ──
+        #  Pass 3: inject \n AFTER known job titles (when run into speech)
         for name, title in roster_map.items():
             if title and len(title) > 3:
                 text = re.sub(
@@ -866,7 +860,7 @@ class SpeakerIdentifier:
         Fallback: if name-on-own-line yields nothing, try inline 'Name: text'
         colon-separated pattern (covers Exxon-style SA transcripts).
         """
-        # ── Pre-step: fix run-together name/speech (LVMH, SAP, Sony, etc.) ──
+        #  Pre-step: fix run-together name/speech (LVMH, SAP, Sony, etc.)
         # Build a name->role map from the ORIGINAL text (before injection scrambles roster lines)
         pre_injection_name_role: dict[str, str] = {}
         _block_m = re.search(
@@ -1013,7 +1007,7 @@ class SpeakerIdentifier:
 
         log.info("        SA strategy: %d segments found", len(segments))
 
-        # ── Fallback: inline 'Name: text' colon pattern (e.g. Exxon) ─────────
+        #  Fallback: inline 'Name: text' colon pattern (e.g. Exxon)
         if not segments or all(s["speaker"] == "Unknown" for s in segments):
             log.info("        SA line-based failed — trying inline colon fallback")
             flat = " ".join(text.split("\n"))  # collapse for inline matching
@@ -1050,7 +1044,7 @@ class SpeakerIdentifier:
 
         return segments if segments else [{"speaker": "Unknown", "text": text}]
 
-    # ── Public entry point ────────────────────────────────────────────────────
+    #  Public entry point
     @classmethod
     def segment(cls, text: str, fmt: str) -> tuple[dict[str, list[str]], list[dict]]:
         if fmt == "factset":
@@ -1084,7 +1078,6 @@ class SpeakerIdentifier:
         return speakers, segments
 
 
-# =============================================================================
 class SectionExtractor:
     """
     Splits transcript into Prepared Remarks and Q&A session.
@@ -1116,7 +1109,6 @@ class SectionExtractor:
         return {"prepared_remarks": text.strip(), "qa_session": ""}
 
 
-# =============================================================================
 class BoilerplateStripper:
     """
     Strips known boilerplate sections from transcripts before processing.
@@ -1163,7 +1155,6 @@ class BoilerplateStripper:
         return text
 
 
-# =============================================================================
 class SemanticChunker:
     """
     Splits speaker segments into overlapping token-aware chunks.
@@ -1227,7 +1218,6 @@ def _has_forex(text: str) -> bool:
     return any(kw in lower for kw in FOREX_KEYWORDS)
 
 
-# =============================================================================
 class PreprocessingAgent:
     """
     Orchestrates the full pipeline for one PDF:
@@ -1253,14 +1243,14 @@ class PreprocessingAgent:
     def process(self, pdf_path: Path) -> TranscriptDoc:
         t0 = time.time()
 
-        # ── Step 1: parse filename ────────────────────────────────────────────
+        #  Step 1: parse filename
         log.info("  [1/7] Parsing filename...")
         company_name, quarter, year = FilenameParser.parse(pdf_path)
         ticker = TickerResolver.resolve(company_name)
         log.info("        -> %s (%s) | %s %s",
                  company_name, ticker, quarter, year)
 
-        # ── Step 2: extract text from PDF ─────────────────────────────────────
+        #  Step 2: extract text from PDF
         log.info("  [2/7] Extracting text from PDF...")
         t = time.time()
         raw_text, is_image = PDFExtractor.extract(pdf_path)
@@ -1299,24 +1289,24 @@ class PreprocessingAgent:
             log.info(
                 "  OCR text extracted successfully — continuing with SA format pipeline")
 
-        # ── Step 3: detect format ─────────────────────────────────────────────
+        #  Step 3: detect format
         log.info("  [3/7] Detecting transcript format...")
         fmt = FormatDetector.detect(raw_text, force_sa=is_image)
 
-        # ── Step 4: strip boilerplate ─────────────────────────────────────────
+        #  Step 4: strip boilerplate
         log.info("  [4/7] Stripping boilerplate...")
         t = time.time()
         raw_text = BoilerplateStripper.strip(raw_text, fmt)
         log.info("        -> done  (%s)", _elapsed(t))
 
-        # ── Step 5: clean text ────────────────────────────────────────────────
+        #  Step 5: clean text
         log.info("  [5/7] Cleaning text...")
         t = time.time()
         cleaned_text = TextCleaner.clean(raw_text, fmt)
         log.info("        -> %d chars after clean  (%s)",
                  len(cleaned_text), _elapsed(t))
 
-        # ── Step 6: speaker segmentation ──────────────────────────────────────
+        #  Step 6: speaker segmentation
         log.info("  [6/7] Identifying speakers (format=%s)...", fmt)
         t = time.time()
         speakers_dict, segments = SpeakerIdentifier.segment(cleaned_text, fmt)
@@ -1327,7 +1317,7 @@ class PreprocessingAgent:
         sections = SectionExtractor.extract(cleaned_text)
         log.info("        -> Q&A detected: %s", bool(sections["qa_session"]))
 
-        # ── Step 7: chunking ──────────────────────────────────────────────────
+        #  Step 7: chunking
         log.info("  [7/7] Chunking per speaker segment...")
         t = time.time()
         all_chunks: list[Chunk] = []
