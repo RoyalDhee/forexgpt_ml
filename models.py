@@ -9,9 +9,10 @@ from typing import Optional
 
 @dataclass
 class Chunk:
-    id: str                          # "chunk_0", "chunk_1", …
+    id: str
     text: str
-    speaker: Optional[str] = None    # "CFO", "CEO", "Analyst", "Operator", "Unknown"
+    # "CFO", "CEO", "Analyst", "Operator", "Unknown"
+    speaker: Optional[str] = None
     section: Optional[str] = None    # "prepared_remarks" | "qa_session"
     token_count: int = 0
     has_forex: bool = False          # True if chunk passed forex keyword filter
@@ -21,7 +22,7 @@ class Chunk:
 class TranscriptDoc:
     """Everything produced by the PreprocessingAgent for one PDF."""
 
-    # ── Metadata ──────────────────────────────────────────────────────────────
+    # Metadata
     company_name: str
     ticker: str
     earnings_date: str               # ISO-8601 date string or "" if unknown
@@ -29,23 +30,23 @@ class TranscriptDoc:
     source: str = "Earnings Call"
     preprocessed_at: str = ""
 
-    # ── Text ─────────────────────────────────────────────────────────────────
+    # Text
     raw_text: str = ""
     cleaned_text: str = ""
 
-    # ── Speaker statements ────────────────────────────────────────────────────
+    # Speaker statements
     speakers: dict[str, list[str]] = field(default_factory=dict)
 
-    # ── Sections ──────────────────────────────────────────────────────────────
+    #  Sections
     sections: dict[str, str] = field(default_factory=lambda: {
         "prepared_remarks": "",
         "qa_session": "",
     })
 
-    # ── Chunks (ALL chunks, forex-flagged or not) ─────────────────────────────
+    #  Chunks (ALL chunks, forex-flagged or not)
     chunks: list[Chunk] = field(default_factory=list)
 
-    # ── Stats ─────────────────────────────────────────────────────────────────
+    #  Stats
     preprocessing_stats: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -81,19 +82,20 @@ class TranscriptDoc:
 class Label:
     """One forex signal label extracted from a single chunk."""
 
-    # ── Input (the exact chunk text that produced the signal) ─────────────────
+    #  Input (the exact chunk text that produced the signal) ─
     input: str
 
-    # ── Output ────────────────────────────────────────────────────────────────
+    #  Output
     signal: bool
     currency_pair: Optional[str]
     direction: Optional[str]         # "LONG" | "SHORT" | "NEUTRAL" | null
     confidence: Optional[float]
     reasoning: str
     magnitude: Optional[str]         # "low" | "moderate" | "high" | null
-    time_horizon: Optional[str]      # "current_quarter" | "next_quarter" | "long_term" | null
+    # "current_quarter" | "next_quarter" | "long_term" | null
+    time_horizon: Optional[str]
 
-    # ── Metadata ──────────────────────────────────────────────────────────────
+    #  Metadata
     company: str
     ticker: str
     earnings_date: str
