@@ -18,7 +18,7 @@ protobuf
 scipy
 
 # Optional: Monitoring
-# wandb  # Uncomment if you want to use Weights & Biases for tracking
+wandb  # Uncomment if you want to use Weights & Biases for tracking
 
 # Optional: Jupyter for notebooks
 # jupyter
