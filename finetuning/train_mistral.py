@@ -2,6 +2,7 @@
 """
 Fine-tune Mistral-7B-Instruct-v0.3 for ForexGPT Signal Extraction
 Using LoRA (Low-Rank Adaptation) for efficient training
+WITH WEIGHT & BIASES TRACKING
 """
 
 import os
@@ -24,6 +25,11 @@ MODEL_NAME = "mistralai/Mistral-7B-Instruct-v0.3"
 OUTPUT_DIR = "models/forexgpt-mistral-7b-lora"
 TRAIN_DATA_PATH = "data/labeled/train.json"
 VAL_DATA_PATH = "data/labeled/val.json"
+
+# Weights & Biases Configuration
+WANDB_PROJECT = "forexgpt"
+WANDB_RUN_NAME = "mistral-7b-lora-v1"   # This run's name
+WANDB_ENTITY = None                     # Wandb username (None = use default)
 
 # LoRA Configuration (as discussed)
 LORA_CONFIG = {
@@ -59,6 +65,8 @@ TRAINING_CONFIG = {
     "save_strategy": "steps",
     "load_best_model_at_end": True,
     "fp16": True,  # Use FP16 for faster training
+    "metric_for_best_model": "eval_loss",
+    "greater_is_better": False
 }
 
 
@@ -90,6 +98,13 @@ def load_and_prepare_data(train_path, val_path, tokenizer):
     
     print(f"Training examples: {len(train_dataset)}")
     print(f"Validation examples: {len(val_dataset)}")
+
+    # Log dataset info to wandb
+    wandb.config.update({
+        "train_examples": len(train_dataset),
+        "val_examples": len(val_dataset),
+        "total_example": len(train_dataset) + len(val_dataset)
+    })
     
     # Format with chat template
     train_dataset = train_dataset.map(
@@ -140,21 +155,50 @@ def setup_model_and_tokenizer():
     model = get_peft_model(model, lora_config)
     
     # Print trainable parameters
-    model.print_trainable_parameters()
+    trainable_params, all_params = model.get_nb_trainable_parameters()
+    trainable_percent = 100 * trainable_params / all_params
+    
+    print(f"Trainable params: {trainable_params:,} || All params: {all_params:,} || Trainable%: {trainable_percent:.4f}%")
+    
+    # Log model config to wandb
+    wandb.config.update({
+        "model_name": MODEL_NAME,
+        "lora_r": LORA_CONFIG["r"],
+        "lora_alpha": LORA_CONFIG["lora_alpha"],
+        "lora_dropout": LORA_CONFIG["lora_dropout"],
+        "trainable_params": trainable_params,
+        "all_params": all_params,
+        "trainable_percent": trainable_percent,
+        "quantization": "4-bit NF4",
+    })
     
     return model, tokenizer
 
 
 def train():
     """
-    Main training function
+    Main training function with Weights & Biases tracking
     """
     print("="*60)
     print("FOREXGPT FINE-TUNING SCRIPT")
     print("Model: Mistral-7B-Instruct-v0.3")
     print("Method: LoRA (Low-Rank Adaptation)")
+    print("Tracking: Weights & Biases")
     print("="*60)
     
+    # Initialize wandb
+    wandb.init(
+        project=WANDB_PROJECT,
+        name=WANDB_RUN_NAME,
+        entity=WANDB_ENTITY,
+        config={
+            **LORA_CONFIG,
+            **TRAINING_CONFIG,
+            "model_name": MODEL_NAME,
+            "output_dir": OUTPUT_DIR,
+        }
+    )
+
     # Setup model and tokenizer
     model, tokenizer = setup_model_and_tokenizer()
     
@@ -164,12 +208,13 @@ def train():
         VAL_DATA_PATH, 
         tokenizer
     )
-    
-    # Training arguments
+
+    # Training arguments with wandb integration
     training_args = TrainingArguments(
         output_dir=OUTPUT_DIR,
         **TRAINING_CONFIG,
-        report_to="none",  # Set to "wandb" if you want to use Weights & Biases
+        report_to="wandb",  # Enable wandb logging
+        run_name=WANDB_RUN_NAME,
     )
     
     # Initialize trainer
@@ -187,26 +232,47 @@ def train():
     # Start training
     print("\nStarting training...")
     print("="*60)
+    print(f"View training progress at: {wandb.run.get_url()}")
+    print("="*60)
+
     trainer.train()
     
     # Save final model
     print("\nSaving final model...")
     trainer.save_model(OUTPUT_DIR)
     tokenizer.save_pretrained(OUTPUT_DIR)
+
+    # Log final metrics
+    final_metrics = {
+        "final_train_loss": trainer.state.log_history[-2]["loss"] if len(trainer.state.log_history) > 1 else None,
+        "final_eval_loss": trainer.state.log_history[-1].get("eval_loss", None),
+    }
+    wandb.log(final_metrics)
     
     print("="*60)
-    print(f"✓ Training complete!")
-    print(f"✓ Model saved to: {OUTPUT_DIR}")
+    print(f"Training complete!")
+    print(f"Model saved to: {OUTPUT_DIR}")
+    print(f"View full training report at: {wandb.run.get_url()}")
     print("="*60)
+
+    # Finish wandb run
+    wandb.finish()
     
     return trainer
 
 
 def test_model(model_path=OUTPUT_DIR):
     """
-    Quick test of the fine-tuned model
+    Quick test of the fine-tuned model and log to wandb
     """
     print("\nTesting fine-tuned model...")
+
+    # Initialize wandb for testing
+    wandb.init(
+        project=WANDB_PROJECT,
+        name=f"{WANDB_RUN_NAME}-test",
+        job_type="evaluation"
+    )
     
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     model = AutoModelForCausalLM.from_pretrained(
@@ -215,29 +281,85 @@ def test_model(model_path=OUTPUT_DIR):
         torch_dtype=torch.float16
     )
     
-    # Test prompt
-    test_transcript = """In Q1, we experienced a 4% revenue headwind from currency movements, 
-    primarily due to USD strength versus EUR. Our European operations represent approximately 
-    35% of total revenue, and we expect this headwind to continue into Q2."""
-    
-    messages = [
-        {"role": "user", "content": f"Extract forex trading signals from this earnings call transcript. Return a structured JSON response.\n\nTranscript:\n{test_transcript}"}
+    # Test prompts
+    test_cases = [
+        {
+            "name": "EUR Headwind",
+            "transcript": """In Q1, we experienced a 4% revenue headwind from currency movements, 
+            primarily due to USD strength versus EUR. Our European operations represent approximately 
+            35% of total revenue, and we expect this headwind to continue into Q2."""
+        },
+        {
+            "name": "JPY Benefit",
+            "transcript": """Our Japan operations benefited from JPY weakness this quarter, with a 3% 
+            tailwind to operating margins. We expect volatility to continue but current trends favor 
+            our margin profile in the region."""
+        },
+        {
+            "name": "Hedged Exposure",
+            "transcript": """We have hedged approximately 75% of our EUR exposure for the next two quarters. 
+            While we saw some currency headwinds in Q1, our hedging strategy limits near-term impact."""
+        }
     ]
     
-    # Generate
+    # Generate and log results
     pipe = pipeline("text-generation", model=model, tokenizer=tokenizer)
-    response = pipe(
-        messages,
-        max_new_tokens=256,
-        temperature=0.7,
-        top_p=0.9,
-        do_sample=True
-    )
+    test_results = []
+
+    for i, test_case in enumerate(test_cases):
+        print(f"\n{'='*60}")
+        print(f"Test Case {i+1}: {test_case['name']}")
+        print(f"{'='*60}")
+        
+        messages = [
+            {"role": "user", "content": f"Extract forex trading signals from this earnings call transcript. Return a structured JSON response.\n\nTranscript:\n{test_case['transcript']}"}
+        ]
+        
+        response = pipe(
+            messages,
+            max_new_tokens=256,
+            temperature=0.7,
+            top_p=0.9,
+            do_sample=True
+        )
+        
+        output = response[0]["generated_text"][-1]["content"]
+        print(f"Model Output:\n{output}\n")
+        
+        # Try to parse as JSON for validation
+        try:
+            import json
+            parsed = json.loads(output)
+            is_valid_json = True
+            print("Valid JSON output")
+        except:
+            is_valid_json = False
+            print("Invalid JSON output")
+        
+        test_results.append({
+            "test_case": test_case["name"],
+            "transcript": test_case["transcript"],
+            "model_output": output,
+            "is_valid_json": is_valid_json
+        })
+
+    # Log test results to wandb
+    wandb.log({
+        "test_results": wandb.Table(
+            columns=["Test Case", "Transcript", "Model Output", "Valid JSON"],
+            data=[[r["test_case"], r["transcript"][:100] + "...", r["model_output"], r["is_valid_json"]] for r in test_results]
+        )
+    })
+
+    # Calculate success rate
+    success_rate = sum(1 for r in test_results if r["is_valid_json"]) / len(test_results)
+    wandb.log({"json_success_rate": success_rate})
     
-    print("\nTest Response:")
-    print("="*60)
-    print(response[0]["generated_text"][-1]["content"])
-    print("="*60)
+    print(f"\n{'='*60}")
+    print(f"JSON Success Rate: {success_rate*100:.1f}%")
+    print(f"{'='*60}")
+    
+    wandb.finish()
 
 
 if __name__ == "__main__":
@@ -246,11 +368,19 @@ if __name__ == "__main__":
         print("WARNING: HF_TOKEN environment variable not set")
         print("You may need to authenticate with Hugging Face")
         print("Run: huggingface-cli login")
-    
+        print()
+
+    try:
+        wandb.login()
+        print("Logged in to Weights & Biases")
+    except:
+        print("Not logged in to Weights & Biases")
+        print("Run: wandb login")
+        print()
+        
     # Run training
     trainer = train()
     
-    # Optional: Test the model
-    print("\nWould you like to test the model? (This will load the model again)")
-    # Uncomment to enable testing:
-    # test_model()
+    # Test the model
+    print("\nRunning test evaluation...")
+    test_model()
