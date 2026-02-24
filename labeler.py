@@ -43,7 +43,7 @@ from config import (
 from models import Label
 
 
-# ── Logging setup ─────────────────────────────────────────────────────────────
+#  Logging setup ─
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(message)s",
@@ -60,7 +60,7 @@ def _elapsed(start: float) -> str:
     return f"{time.time() - start:.1f}s"
 
 
-# ── System prompt ─────────────────────────────────────────────────────────────
+#  System prompt ─
 _SYSTEM_PROMPT = """You are a financial analyst specialising in foreign exchange (FX) markets.
 Your task is to read an excerpt from an earnings call transcript and extract ALL forex trading signals present.
 
@@ -106,7 +106,7 @@ class LabelingAgent:
             )
         self.client = OpenAI(api_key=key)
 
-    # ── Call OpenAI ───────────────────────────────────────────────────────────
+    #  Call OpenAI ─
     def _call_openai(self, user_msg: str) -> list[dict]:
         """Call OpenAI and return a list of signal dicts."""
         response = self.client.chat.completions.create(
@@ -138,7 +138,7 @@ class LabelingAgent:
         log.warning("    Could not parse OpenAI response: %s", cleaned[:120])
         return []
 
-    # ── Build Label objects ───────────────────────────────────────────────────
+    #  Build Label objects ─
     @staticmethod
     def _build_labels(
         signals:    list[dict],
@@ -171,7 +171,7 @@ class LabelingAgent:
             ))
         return labels
 
-    # ── Per-doc output path ───────────────────────────────────────────────────
+    #  Per-doc output path ─
     @staticmethod
     def _doc_label_path(meta: dict, labeled_dir: Path) -> Path:
         """
@@ -183,7 +183,7 @@ class LabelingAgent:
         safe_quarter = re.sub(r"\s+", "_", meta["quarter"].lower())
         return labeled_dir / f"{safe_company}_{safe_quarter}_labels.json"
 
-    # ── Process one preprocessed JSON file ───────────────────────────────────
+    #  Process one preprocessed JSON file ─
     def label_document(self, json_path: Path, labeled_dir: Path) -> tuple[list[Label], Path]:
         """
         Label all forex chunks in one preprocessed JSON.
@@ -262,7 +262,7 @@ class LabelingAgent:
         )
         return all_labels, out_path
 
-    # ── Rebuild aggregate from all per-doc files ──────────────────────────────
+    #  Rebuild aggregate from all per-doc files
     @staticmethod
     def _rebuild_aggregate(labeled_dir: Path, output_path: Path) -> int:
         """
@@ -282,7 +282,7 @@ class LabelingAgent:
         )
         return len(all_labels)
 
-    # ── Batch run ─────────────────────────────────────────────────────────────
+    #  Batch run ─
     def run_all(
         self,
         preprocessed_dir: Path = PREPROCESSED_DIR,
@@ -312,7 +312,7 @@ class LabelingAgent:
                         preprocessed_dir)
             return output_path
 
-        # ── Filter: --pattern ─────────────────────────────────────────────────
+        #  Filter: --pattern ─
         if pattern:
             json_files = [p for p in json_files if pattern.lower()
                           in p.name.lower()]
@@ -322,7 +322,7 @@ class LabelingAgent:
                 log.warning("No files matched pattern '%s'", pattern)
                 return output_path
 
-        # ── Filter: --skip ────────────────────────────────────────────────────
+        #  Filter: --skip
         if skip:
             json_files = json_files[skip:]
             log.info(
@@ -330,7 +330,7 @@ class LabelingAgent:
                 skip, skip + 1, len(json_files),
             )
 
-        # ── Filter: --limit ───────────────────────────────────────────────────
+        #  Filter: --limit ─
         if limit:
             json_files = json_files[:limit]
             log.info("--limit %d: processing %d file(s)",
@@ -346,7 +346,7 @@ class LabelingAgent:
             log.info("[%d/%d] %s", i, len(json_files), jf.name)
             log.info("=" * 60)
 
-            # ── Resume: check if per-doc file already exists ──────────────────
+            #  Resume: check if per-doc file already exists
             if resume:
                 try:
                     preview = json.loads(jf.read_text(encoding="utf-8"))
@@ -371,7 +371,7 @@ class LabelingAgent:
             except Exception as e:
                 log.error("  ✗ Document-level error: %s", e, exc_info=True)
 
-        # ── Rebuild aggregate training_data.json ──────────────────────────────
+        # Rebuild aggregate training_data.json
         log.info("")
         log.info("Rebuilding aggregate -> %s", output_path.name)
         agg_count = self._rebuild_aggregate(labeled_dir, output_path)
