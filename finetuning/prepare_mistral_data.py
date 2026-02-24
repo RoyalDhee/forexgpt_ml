@@ -33,7 +33,7 @@ When given an earnings transcript excerpt, you analyze it for currency exposure 
 - confidence (float): Confidence score between 0.0 and 1.0
 - reasoning (string): Clear explanation of why this signal exists
 - magnitude (string): Impact level - "low", "moderate", or "high"
-- time_horizon (string): Expected timeframe - "next_week", "next_month", "next_quarter", or "next_year"
+- time_horizon (string): Expected timeframe - "current_quater", "long_term", "next_quarter", or "null"
 
 Only extract signals when there is clear forex exposure mentioned. Be conservative with confidence scores."""
 
